@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+langgraph
+langchain
+langchain-community
+supabase
+psycopg[binary]
+networkx
+
