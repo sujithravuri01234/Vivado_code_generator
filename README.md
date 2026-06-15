@@ -65,7 +65,7 @@ The frontend uses Vite for blazing fast development and hot-module replacement.
 
 ---
 
-## 🛠 Tech Stack
+##  Tech Stack
 - **Frontend:** React, Vite, TailwindCSS, React Flow
 - **Backend:** Python, FastAPI, LangGraph Orchestration
 - **AI/LLM:** Grok API
