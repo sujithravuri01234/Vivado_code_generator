@@ -3,7 +3,7 @@
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Vercel-blue?style=for-the-badge)](https://vivado-code-generator-git-main-sujithravuri1235.vercel.app/)
 
 ## 🌐 Live Deployment
-- **Frontend URL:** [https://vivado-code-generator-git-main-sujithravuri1235.vercel.app/](https://vivado-code-generator-git-main-sujithravuri1235.vercel.app/)
+- **Deployment Link:** [https://vivado-code-generator-git-main-sujithravuri1235.vercel.app/](https://vivado-code-generator-git-main-sujithravuri1235.vercel.app/)
 
 ##  Project Overview
 The **AI Hardware Design Copilot** is a full-stack web application that transforms natural language prompts into verified digital hardware circuits. Acting as an intelligent assistant for FPGA and ASIC engineers, it automatically generates Verilog code, tests it for syntax and synthesis errors using Xilinx Vivado, and visualizes the resulting circuit architecture on a modern frontend dashboard.
