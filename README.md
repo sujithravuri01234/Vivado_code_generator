@@ -2,7 +2,7 @@
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Vercel-blue?style=for-the-badge)](https://vivado-code-generator-git-main-sujithravuri1235.vercel.app/)
 
-## 🌐 Live Deployment
+##  Live Deployment
 - **Deployment Link:** [https://vivado-code-generator-git-main-sujithravuri1235.vercel.app/](https://vivado-code-generator-git-main-sujithravuri1235.vercel.app/)
 
 ##  Project Overview
