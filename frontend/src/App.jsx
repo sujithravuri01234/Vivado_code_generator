@@ -331,11 +331,11 @@ export function App() {
 
       if (!response.ok) {
         let detail = ''
+        const text = await response.text()
         try {
-          const payload = await response.json()
+          const payload = JSON.parse(text)
           detail = payload?.detail ? `: ${payload.detail}` : ''
         } catch {
-          const text = await response.text()
           detail = text.trim() ? `: ${text.trim()}` : ''
         }
         throw new Error(`Backend returned ${response.status}${detail}`)
