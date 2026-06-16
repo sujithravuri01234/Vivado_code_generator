@@ -26,11 +26,11 @@ from app.services.diagram import build_react_flow_from_contract
 from app.services.rag import KnowledgeRetriever
 from app.services.supabase_store import CircuitRepository
 from app.services.vivado import VivadoService
+from app.services.llm_generator import LLMGenerator
 from app.services.verilog import generate_verilog_from_prompt
 
 
 class DesignState(TypedDict, total=False):
-    validate_vivado: bool
     prompt: str
     email: str
     design_hint: str
@@ -39,6 +39,8 @@ class DesignState(TypedDict, total=False):
     validate_vivado: bool
     result: DesignContract
     knowledge_contexts: list[dict[str, str]]
+    llm_generation_count: int
+    vivado_error_log: str
 
 
 def analyze_requirements(state: DesignState) -> DesignState:
@@ -141,10 +143,20 @@ def generate_verilog(state: DesignState) -> DesignState:
     result = state["result"]
     if result.design_type == "digital":
         if result.design_name == "unsupported_design":
-            result.design_name = "custom_design"
-            result.verilog = generate_verilog_from_prompt(state["prompt"], state.get("design_hint", "auto"), result.modeling_style)
-            result.testbench = build_testbench(result)
-            return {"result": result}
+            generator = LLMGenerator()
+            error_log = state.get("vivado_error_log", "")
+            verilog, testbench = generator.generate_verilog_with_llm(state["prompt"], "custom_design", error_log)
+            if verilog:
+                result.design_name = "custom_design"
+                result.verilog = verilog
+                result.testbench = testbench or build_testbench(result)
+            else:
+                result.design_name = "custom_design"
+                result.verilog = generate_verilog_from_prompt(state["prompt"], state.get("design_hint", "auto"), result.modeling_style)
+                result.testbench = build_testbench(result)
+
+            count = state.get("llm_generation_count", 0)
+            return {"result": result, "llm_generation_count": count + 1}
         result.verilog = render_verilog_for_request(result.design_name, result.modeling_style)
         result.testbench = build_testbench(result)
     else:
@@ -164,8 +176,27 @@ def validate_with_vivado(state: DesignState) -> DesignState:
         "status",
         vivado_reports.artifacts.get("status", ""),
     )
-    return {"result": result}
+    
+    error_log = state.get("vivado_error_log", "")
+    if "error" in result.vivado_status.lower() or "fail" in result.vivado_status.lower():
+        log_content = vivado_reports.log.get("synthesis_log", result.vivado_status)
+        error_log = str(log_content)
+    else:
+        error_log = ""
+        
+    return {"result": result, "vivado_error_log": error_log}
 
+def route_after_vivado(state: DesignState) -> str:
+    result = state["result"]
+    status = result.vivado_status.lower()
+    is_error = "error" in status or "fail" in status
+    
+    if result.design_name == "custom_design" and is_error:
+        count = state.get("llm_generation_count", 0)
+        if count < 3:
+            return "generate_verilog"
+            
+    return "generate_diagram"
 
 def generate_diagram(state: DesignState) -> DesignState:
     result = state["result"]
@@ -219,7 +250,7 @@ def build_graph():
     graph.add_edge("retrieve_knowledge", "build_architecture")
     graph.add_edge("build_architecture", "generate_verilog")
     graph.add_edge("generate_verilog", "validate_with_vivado")
-    graph.add_edge("validate_with_vivado", "generate_diagram")
+    graph.add_conditional_edges("validate_with_vivado", route_after_vivado)
     graph.add_edge("generate_diagram", "finalize_output")
     graph.add_edge("finalize_output", "persist_to_supabase")
     graph.add_edge("persist_to_supabase", END)

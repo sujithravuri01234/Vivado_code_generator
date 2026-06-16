@@ -214,7 +214,7 @@ def detect_supported_design(prompt: str) -> str:
         return "dff"
     if any(keyword in text for keyword in ["flip flop", "flip-flop"]):
         return "dff"
-    if any(keyword in text for keyword in ["fsm", "finite state machine", "state machine"]):
+    if "traffic light" in text or ("fsm" in text and "traffic" in text):
         return "fsm_traffic_light"
     if "uart receiver" in text or "uart rx" in text:
         return "uart_rx_8n1"
