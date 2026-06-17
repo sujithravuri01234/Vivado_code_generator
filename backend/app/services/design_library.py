@@ -216,22 +216,23 @@ def detect_supported_design(prompt: str) -> str:
         return "dff"
     if "traffic light" in text or ("fsm" in text and "traffic" in text):
         return "fsm_traffic_light"
+    is_custom = any(kw in text for kw in ["with", "custom", "fifo", "buffer", "axi", "interface", "ram", "register", "bus", "controller"]) or len(text.split()) > 4
     if "uart receiver" in text or "uart rx" in text:
-        return "uart_rx_8n1"
+        return "unsupported_design" if is_custom else "uart_rx_8n1"
     if "uart" in text:
-        return "uart_tx_8n1"
+        return "unsupported_design" if is_custom else "uart_tx_8n1"
     if "spi slave" in text:
-        return "spi_slave_8bit"
+        return "unsupported_design" if is_custom else "spi_slave_8bit"
     if "spi" in text:
-        return "spi_master_8bit"
+        return "unsupported_design" if is_custom else "spi_master_8bit"
     if "i2c slave" in text:
-        return "i2c_slave_simple"
+        return "unsupported_design" if is_custom else "i2c_slave_simple"
     if "i2c" in text:
-        return "i2c_master_simple"
+        return "unsupported_design" if is_custom else "i2c_master_simple"
     if "axi lite" in text or "axi-lite" in text or "axilite" in text:
-        return "axi_lite_slave_simple"
+        return "unsupported_design" if is_custom else "axi_lite_slave_simple"
     if protocol_design := detect_protocol_design(text):
-        return protocol_design
+        return "unsupported_design" if is_custom else protocol_design
     if any(keyword in text for keyword in ["fifo", "first in first out", "queue"]):
         depth, width = detect_fifo_spec(text)
         if depth == 4 and width == 8:
