@@ -145,11 +145,12 @@ def generate_verilog(state: DesignState) -> DesignState:
         if result.design_name == "unsupported_design":
             generator = LLMGenerator()
             error_log = state.get("vivado_error_log", "")
-            verilog, testbench = generator.generate_verilog_with_llm(state["prompt"], "custom_design", error_log)
+            verilog, testbench, doc = generator.generate_verilog_with_llm(state["prompt"], "custom_design", error_log)
             if verilog:
                 result.design_name = "custom_design"
                 result.verilog = verilog
                 result.testbench = testbench or build_testbench(result)
+                result.documentation = doc
             else:
                 result.design_name = "custom_design"
                 result.verilog = generate_verilog_from_prompt(state["prompt"], state.get("design_hint", "auto"), result.modeling_style)
@@ -201,7 +202,8 @@ def route_after_vivado(state: DesignState) -> str:
 def generate_diagram(state: DesignState) -> DesignState:
     result = state["result"]
     result.diagram_json = build_react_flow_from_contract(result)
-    result.documentation = build_documentation(result)
+    if not result.documentation or result.design_name != "custom_design":
+        result.documentation = build_documentation(result)
     if result.knowledge_contexts:
         result.retrieved_context_summary = "; ".join(
             f"{item.get('title', 'Knowledge')}: {item.get('snippet', '')[:120]}"

@@ -10,33 +10,24 @@ class LLMGenerator:
         self.api_key = settings.grok_api_key
         self.url = "https://api.groq.com/openai/v1/chat/completions"
 
-    def generate_verilog_with_llm(self, prompt: str, design_name: str, previous_error: str) -> Tuple[str, str]:
+    def generate_verilog_with_llm(self, prompt: str, design_name: str, previous_error: str) -> Tuple[str, str, str]:
         if not self.api_key:
             print("Warning: GROK_API_KEY not set. Cannot use LLM fallback.")
-            return "", ""
+            return "", "", ""
 
         system_prompt = (
-            "You are an expert Senior FPGA Engineer. Your task is to generate highly accurate, synthesizable Verilog code and a self-checking Testbench.\n\n"
-            "Strict Guidelines for State Machines:\n"
-            "1. For sequence detectors, verify if it is a Moore or Mealy machine:\n"
+            "You are an expert Hardware Design Engineer specializing in Digital Design, RTL Design, FPGA Design, and Computer Architecture.\n"
+            "Your task is to generate complete, synthesizable, and functionally correct hardware designs from natural language specifications.\n\n"
+            "WORKFLOW & GUIDELINES:\n"
+            "1. STRICT RULES ON STATE MACHINES:\n"
             "   - Moore: The output must depend ONLY on the current state (e.g., assign out = (state == STATE_DETECTED)). For an N-bit sequence, a Moore machine requires exactly N+1 states.\n"
             "   - Mealy: The output depends on both the current state and the inputs.\n"
-            "2. EVERY state MUST have a unique encoding value. Do NOT reuse, overlap, or duplicate state codes. If a design has K states, you must use at least ceil(log2(K)) bits for the state registers (e.g., 5 states require a 3-bit register: `reg [2:0] state, next_state;` with 5 distinct parameters from 3'b000 to 3'b100). Double-check that all state parameters have different binary values.\n"
-            "3. For sequence detectors (especially overlapping ones), trace the transitions carefully: if a partial match fails, the next state must go to the longest matching prefix of the sequence. If NO prefix of the sequence matches (e.g., sequence is '100' or '0'), the next state MUST transition to IDLE (do NOT stay in a non-matching state).\n"
-            "   - Example: In a '1011' overlapping detector, if you are in the state representing '101' and receive a '0' (making the sequence '1010'), the last two bits '10' match the prefix, so the transition MUST go to the state representing '10'. However, if you are in the state representing '10' and receive a '0' (making '100'), none of the prefix matches, so you MUST transition to IDLE.\n"
-            "   - Example: From the match state ('1011'), receiving a '0' (making '10110') must transition to the '10' state, and receiving a '1' (making '10111') must transition to the '1' state.\n"
-            "4. Use standard two-always-block or three-always-block coding styles for FSMs (one sequential block for state transitions, one combinational block for next-state logic using blocking assignments `=`, and combinational assignment or block for output).\n"
-            "5. Ensure active-low or active-high resets are implemented exactly as requested (e.g., asynchronous active-low reset should be `always @(posedge clk or negedge reset_n)` and check `if (!reset_n)`).\n\n"
-            "Strict Guidelines for Processors / CPUs (e.g., RISC-V or custom cores):\n"
-            "1. Must implement a real Register File (e.g., array of registers `reg [31:0] rf [0:31]`). Read/write values from/to the register file using decoded instruction register indices (e.g., `rf[rs1]`), do NOT perform operations on the raw register index variables directly.\n"
-            "2. Ensure instruction opcodes match standard specifications. For RISC-V (RV32I):\n"
-            "   - R-type opcode is 7'b0110011\n"
-            "   - I-type ALU opcode is 7'b0010011\n"
-            "   - Load opcode is 7'b0000011\n"
-            "   - Store opcode is 7'b0100011\n"
-            "   - Branch opcode is 7'b1100011\n"
-            "3. Implement Program Counter (PC) logic and instruction fetch logic correctly. The PC must increment appropriately (e.g., by 4 on each clock cycle unless branching) and index an actual instruction memory array.\n"
-            "   - **STRICT RULE ON MULTI-DRIVEN REGISTERS**: Do NOT assign to the same register (e.g., `pc`) from multiple different `always` blocks. Instead, compute a combinational `next_pc` value and update the PC register in a single sequential `always` block. Follow this structural template:\n"
+            "   - EVERY state MUST have a unique encoding value. Do NOT reuse or duplicate state codes. If a design has K states, you must use at least ceil(log2(K)) bits for the state registers (e.g., 5 states require a 3-bit register: `reg [2:0] state, next_state;`).\n"
+            "   - For sequence detectors (especially overlapping ones), trace transitions carefully: if a partial match fails, the next state must go to the longest matching prefix of the sequence. If NO prefix matches, transition to IDLE.\n\n"
+            "2. STRICT GUIDELINES FOR PROCESSORS / CPUS (e.g., RISC-V or custom cores):\n"
+            "   - Must implement a real Register File (e.g., array of registers `reg [31:0] rf [0:31]`). Read/write values using decoded register indices (e.g., `rf[rs1]`), do NOT perform operations on register index variables directly.\n"
+            "   - Ensure instruction opcodes match standard specs. For RISC-V (RV32I): R-type is 7'b0110011, I-type is 7'b0010011, load is 7'b0000011, store is 7'b0100011, branch is 7'b1100011.\n"
+            "   - PC update must follow a single sequential `always` block. Calculate a combinational `next_pc` value (which defaults to `pc_reg + 4`, but jumps to the target address if branch condition is met) to avoid multi-driven conflicts. Template:\n"
             "     ```verilog\n"
             "     reg [31:0] pc_reg;\n"
             "     reg [31:0] next_pc;\n"
@@ -53,16 +44,20 @@ class LLMGenerator:
             "             pc_reg <= next_pc;\n"
             "     end\n"
             "     ```\n"
-            "4. For pipelined processors, correctly declare pipeline register stages (e.g., IF/ID, ID/EX, EX/MEM, MEM/WB registers) and transfer signals sequentially on clock edges to avoid combinational loops.\n"
-            "5. If any output port or internal signal is assigned inside an `always` block, it MUST be declared as a `reg` (e.g., `output reg [31:0] pc`).\n"
-            "6. In CPU designs (like RISC-V), register 0 (`x0`) must be hardwired to 0. Reads must return 0, and writes to `x0` must be ignored (e.g., `if (rd != 5'd0) rf[rd] <= data;`).\n\n"
-            "Formatting:\n"
-            "- Output the synthesizable Verilog design code inside the first ```verilog ... ``` block.\n"
-            "  - BEFORE the module definition, write a detailed Verilog comment block containing:\n"
-            "    1. The list of states and what sequence they represent.\n"
-            "    2. A transition table trace: for each state, show the sequence represented, the next bit, the resulting sequence, the longest matching prefix, and the resulting next state.\n"
-            "- Output the Testbench code inside the second ```verilog ... ``` block.\n"
-            "- Do not write any conversational text outside the code blocks."
+            "   - Register 0 (`x0`) must be hardwired to 0. Reads must return 0, and writes to `x0` must be ignored (e.g., `if (rd != 5'd0) rf[rd] <= data;`).\n"
+            "   - If any output port or internal signal is assigned inside an `always` block, it MUST be declared as a `reg`.\n\n"
+            "OUTPUT FORMAT:\n"
+            "Output the following sections in this exact order. Use markdown formatting:\n"
+            "1. Requirement Summary\n"
+            "2. Architecture Explanation\n"
+            "3. Modeling Style Used\n"
+            "4. Complete Synthesizable Verilog Code (inside ```verilog ... ```)\n"
+            "5. Complete Testbench (inside ```verilog ... ```)\n"
+            "6. Functional Verification Plan\n"
+            "7. FPGA Implementation Notes\n"
+            "8. Limitations and Assumptions\n"
+            "9. Confidence Assessment\n\n"
+            "Do not write any conversational text outside the code blocks and markdown sections."
         )
 
         user_prompt = f"Design a circuit for the following prompt: {prompt}\nDesign Name: {design_name}\n"
@@ -87,7 +82,8 @@ class LLMGenerator:
         try:
             req = urllib.request.Request(self.url, data=json.dumps(payload).encode('utf-8'), headers=headers, method='POST')
             with urllib.request.urlopen(req, timeout=60.0) as response:
-                data = json.loads(response.read().decode('utf-8'))
+                raw_response = response.read().decode('utf-8')
+                data = json.loads(raw_response)
                 content = data["choices"][0]["message"]["content"]
 
                 # Extract verilog and testbench
@@ -105,7 +101,7 @@ class LLMGenerator:
                     else:
                         verilog = code_blocks[0].strip()
                 
-                return verilog, testbench
+                return verilog, testbench, content
         except Exception as e:
             print(f"LLM Generation failed: {e}")
-            return "", ""
+            return "", "", ""
